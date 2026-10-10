@@ -1,0 +1,342 @@
+:root {
+  --ink: #12202a;
+  --ink-soft: #3a4f5c;
+  --paper: #f3efe6;
+  --panel: rgba(255, 252, 246, 0.82);
+  --line: rgba(18, 32, 42, 0.12);
+  --accent: #0f766e;
+  --accent-deep: #0b5a54;
+  --user-bg: #dff3ef;
+  --bot-bg: #fffdf8;
+  --danger: #9b2c2c;
+  --shadow: 0 18px 50px rgba(18, 32, 42, 0.12);
+  --radius: 18px;
+  --font-brand: "Fraunces", Georgia, serif;
+  --font-ui: "Manrope", system-ui, sans-serif;
+  --font-code: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  background: var(--paper);
+}
+
+body {
+  min-height: 100dvh;
+}
+
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(900px 520px at 8% -10%, rgba(15, 118, 110, 0.22), transparent 55%),
+    radial-gradient(700px 480px at 100% 0%, rgba(196, 125, 58, 0.16), transparent 50%),
+    linear-gradient(165deg, #efe8da 0%, #e7f0ec 42%, #f5f1e8 100%);
+  pointer-events: none;
+}
+
+.atmosphere::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E");
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  width: min(920px, 100%);
+  height: 100dvh;
+  margin: 0 auto;
+  padding: 1.1rem 1rem 0.85rem;
+}
+
+.top {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 0.2rem 1rem;
+  animation: rise 0.55s ease both;
+}
+
+.brand {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+}
+
+.tagline {
+  margin: 0.35rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.status {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+
+.status.ok {
+  color: var(--accent-deep);
+}
+
+.status.bad {
+  color: var(--danger);
+}
+
+.model,
+.ghost,
+.send {
+  font: inherit;
+}
+
+.model,
+.ghost {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 12px;
+  padding: 0.55rem 0.75rem;
+  backdrop-filter: blur(10px);
+}
+
+.model {
+  max-width: 190px;
+}
+
+.ghost {
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.ghost:hover {
+  transform: translateY(-1px);
+  background: #fff;
+}
+
+.thread {
+  overflow: auto;
+  padding: 0.4rem 0.15rem 1rem;
+  scroll-behavior: smooth;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 8px), transparent 100%);
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  min-height: 48%;
+  text-align: center;
+  color: var(--ink-soft);
+  animation: fade 0.7s ease both;
+}
+
+.empty strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--ink);
+  font-family: var(--font-brand);
+  font-size: 1.35rem;
+}
+
+.msg {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+  max-width: 92%;
+  animation: rise 0.35s ease both;
+}
+
+.msg.user {
+  margin-left: auto;
+}
+
+.msg .who {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.msg .bubble {
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bot-bg);
+  box-shadow: var(--shadow);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+}
+
+.msg.user .bubble {
+  background: var(--user-bg);
+  border-color: rgba(15, 118, 110, 0.18);
+}
+
+.msg .bubble pre,
+.msg .bubble code {
+  font-family: var(--font-code);
+  font-size: 0.86rem;
+}
+
+.msg .bubble pre {
+  margin: 0.65rem 0 0;
+  padding: 0.85rem;
+  overflow: auto;
+  border-radius: 12px;
+  background: #102029;
+  color: #e8f2ef;
+}
+
+.msg.streaming .bubble::after {
+  content: "▍";
+  margin-left: 2px;
+  animation: blink 1s steps(1) infinite;
+  color: var(--accent);
+}
+
+.composer {
+  padding: 0.35rem 0 0.2rem;
+  animation: rise 0.55s ease 0.08s both;
+}
+
+.form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.65rem;
+  align-items: end;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
+}
+
+textarea {
+  width: 100%;
+  min-height: 52px;
+  max-height: 160px;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1.45;
+  padding: 0.45rem 0.35rem;
+}
+
+.send {
+  border: 0;
+  border-radius: 14px;
+  padding: 0.85rem 1.2rem;
+  background: var(--accent);
+  color: #f7fffd;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+
+.send:hover:not(:disabled) {
+  background: var(--accent-deep);
+  transform: translateY(-1px);
+}
+
+.send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.hint {
+  margin: 0.55rem 0 0;
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+@media (max-width: 720px) {
+  .shell {
+    padding: 0.85rem 0.7rem 0.7rem;
+  }
+
+  .top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .meta {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .model {
+    flex: 1;
+    max-width: none;
+  }
+
+  .msg {
+    max-width: 100%;
+  }
+}

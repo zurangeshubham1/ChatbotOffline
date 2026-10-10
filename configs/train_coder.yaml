@@ -1,0 +1,48 @@
+# Unsloth LoRA fine-tune for a coding chatbot.
+# Model: Qwen2.5-Coder-1.5B — good coding quality, fits 8–16GB VRAM with 4-bit.
+# Requires NVIDIA GPU + CUDA for QLoRA training.
+
+model: unsloth/Qwen2.5-Coder-1.5B-Instruct
+
+data:
+  local_dataset:
+    - d:/LLM/coding-bot/data/coding_qa.jsonl
+  format_type: conversational
+
+training:
+  training_type: lora
+  max_seq_length: 2048
+  load_in_4bit: true
+  output_dir: d:/LLM/coding-bot/outputs/qwen25-coder-lora
+  num_epochs: 3
+  learning_rate: 0.0002
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  warmup_steps: 5
+  max_steps: 60
+  save_steps: 30
+  weight_decay: 0.01
+  random_seed: 3407
+  packing: false
+  train_on_completions: true
+  gradient_checkpointing: "unsloth"
+
+lora:
+  lora_r: 16
+  lora_alpha: 16
+  lora_dropout: 0.0
+  target_modules: "q_proj,k_proj,v_proj,o_proj,gate_proj,up_proj,down_proj"
+  vision_all_linear: false
+  use_rslora: false
+  use_loftq: false
+  use_dora: false
+  finetune_vision_layers: true
+  finetune_language_layers: true
+  finetune_attention_modules: true
+  finetune_mlp_modules: true
+
+logging:
+  enable_wandb: false
+  wandb_project: coding-bot
+  enable_tensorboard: false
+  tensorboard_dir: runs
