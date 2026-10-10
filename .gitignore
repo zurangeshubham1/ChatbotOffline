@@ -2,7 +2,11 @@
 __pycache__/
 *.pyc
 outputs/
-*.gguf
+tmp/
+models/*.gguf
+models/.cache/
+runtime/*
+!runtime/.gitkeep
 .DS_Store
 Thumbs.db
 .env

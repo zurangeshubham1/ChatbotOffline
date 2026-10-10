@@ -2,12 +2,7 @@
   const SYSTEM =
     "You are a helpful offline coding assistant. Prefer clear, correct code with short explanations. Support Python, Java, JavaScript, SQL, and algorithms.";
 
-  const preferred = [
-    "coding-bot:latest",
-    "coding-bot",
-    "qwen2.5-coder:1.5b",
-    "qwen2.5:1.5b-instruct",
-  ];
+  const DEFAULT_MODEL = "qwen2.5-coder-1.5b-instruct-q4_k_m";
 
   const els = {
     status: document.getElementById("status"),
@@ -33,7 +28,7 @@
       <div class="empty">
         <div>
           <strong>Ask anything about code</strong>
-          Write a function, fix a bug, or explain an error — answers stay on this PC.
+          Write a function, fix a bug, or explain an error — answers stay on this PC via llama.cpp.
         </div>
       </div>`;
   }
@@ -81,11 +76,7 @@
     els.send.disabled = busy || !els.input.value.trim();
   }
 
-  async function loadModels() {
-    const res = await fetch("/api/tags");
-    if (!res.ok) throw new Error("Ollama not reachable");
-    const data = await res.json();
-    const names = (data.models || []).map((m) => m.name);
+  function setModelOptions(names) {
     els.model.innerHTML = "";
     for (const name of names) {
       const opt = document.createElement("option");
@@ -93,13 +84,33 @@
       opt.textContent = name;
       els.model.appendChild(opt);
     }
-    const pick =
-      preferred.find((p) => names.includes(p)) ||
-      names.find((n) => n.startsWith("coding-bot") || n.includes("coder")) ||
-      names[0];
-    if (pick) els.model.value = pick;
-    if (!names.length) throw new Error("No models installed");
-    setStatus("Ready · offline", "ok");
+    els.model.value = names[0] || DEFAULT_MODEL;
+  }
+
+  async function loadModels() {
+    const res = await fetch("/api/tags");
+    if (!res.ok) throw new Error("GUI server not reachable");
+    const data = await res.json();
+    const names = (data.models || []).map((m) => m.name);
+    setModelOptions(names.length ? names : [DEFAULT_MODEL]);
+
+    const health = await fetch("/api/health");
+    const h = await health.json().catch(() => ({ ok: false }));
+    if (!h.ok) {
+      setStatus("Start llama.cpp on :8080", "bad");
+      throw new Error("llama.cpp not running on 127.0.0.1:8080");
+    }
+    setStatus("Ready · llama.cpp · offline", "ok");
+  }
+
+  function extractDelta(obj) {
+    // OpenAI SSE chunk
+    const choice = obj.choices && obj.choices[0];
+    if (choice?.delta?.content) return choice.delta.content;
+    if (choice?.message?.content) return choice.message.content;
+    // Fallback if anything Ollama-like slips through
+    if (obj.message?.content) return obj.message.content;
+    return "";
   }
 
   async function sendMessage(text) {
@@ -117,10 +128,10 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: els.model.value,
+          model: els.model.value || DEFAULT_MODEL,
           messages,
           stream: true,
-          options: { temperature: 0.2 },
+          temperature: 0.2,
         }),
       });
       if (!res.ok || !res.body) throw new Error("Chat failed");
@@ -133,13 +144,22 @@
         const { value, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
+        const parts = buffer.split("\n");
+        buffer = parts.pop() || "";
+        for (const line of parts) {
           const trimmed = line.trim();
-          if (!trimmed) continue;
-          const obj = JSON.parse(trimmed);
-          const piece = obj.message?.content || "";
+          if (!trimmed || trimmed.startsWith(":")) continue;
+          const data = trimmed.startsWith("data:")
+            ? trimmed.slice(5).trim()
+            : trimmed;
+          if (!data || data === "[DONE]") continue;
+          let obj;
+          try {
+            obj = JSON.parse(data);
+          } catch {
+            continue;
+          }
+          const piece = extractDelta(obj);
           if (piece) {
             reply += piece;
             bubble.innerHTML = formatContent(reply);
@@ -149,8 +169,10 @@
       }
       messages.push({ role: "assistant", content: reply || "(no reply)" });
       if (!reply) bubble.textContent = "(no reply)";
+      setStatus("Ready · llama.cpp · offline", "ok");
     } catch (err) {
-      bubble.textContent = "Could not reach the local model. Is Ollama running?";
+      bubble.textContent =
+        "Could not reach llama.cpp. Run scripts\\start_llama.ps1 then retry.";
       setStatus("Offline / error", "bad");
       messages.pop();
     } finally {

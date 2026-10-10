@@ -1,61 +1,71 @@
-# Coding Bot (offline)
+# CodeLocal — offline coding chatbot (llama.cpp)
 
-Local ChatGPT-style coding assistant.
+No Ollama. No cloud API. Local GGUF model via **llama.cpp** + CodeLocal GUI.
 
-## Your PC right now
+## Layout
 
-| Item | Status |
-|------|--------|
-| GPU | Intel UHD only (no NVIDIA CUDA) |
-| RAM | 16 GB |
-| Ollama | Installed — used for offline chat |
-| Unsloth repo | `d:\LLM\unsloth` — for fine-tune when GPU available |
+```
+coding-bot/
+├── runtime/          # llama-server.exe + DLLs (Windows CPU build)
+├── models/
+│   └── qwen2.5-coder-1.5b-instruct-q4_k_m.gguf   (~1.12 GB)
+├── scripts/
+│   ├── download_assets.ps1
+│   ├── start_llama.ps1
+│   ├── start_codelocal.ps1
+│   └── gui_server.py
+└── gui/
+    ├── index.html
+    ├── app.js
+    └── app.css
+```
 
-**Offline chat works today** via Ollama.  
-**Unsloth LoRA fine-tune needs an NVIDIA GPU** (or free Colab T4). Jarvis (voice + desktop) comes later.
+## Personal laptop (test first)
 
-## 1) Run offline chat (GUI — recommended)
+### One-time download (if missing)
 
 ```powershell
 cd d:\LLM\coding-bot
+powershell -ExecutionPolicy Bypass -File scripts\download_assets.ps1
+```
+
+- Runner: [llama.cpp Windows CPU](https://github.com/ggml-org/llama.cpp/releases) (`*-bin-win-cpu-x64.zip`)
+- Model: [Qwen2.5-Coder-1.5B-Instruct Q4_K_M](https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF)
+
+### Run
+
+```powershell
+cd d:\LLM\coding-bot
+powershell -ExecutionPolicy Bypass -File scripts\start_codelocal.ps1
+```
+
+- llama.cpp API: `http://127.0.0.1:8080/v1/chat/completions`
+- CodeLocal GUI: `http://127.0.0.1:7860/`
+
+Or manually:
+
+```powershell
+# Terminal 1
+powershell -ExecutionPolicy Bypass -File scripts\start_llama.ps1
+
+# Terminal 2
 py -3 scripts\gui_server.py
 ```
 
-Browser opens at [http://127.0.0.1:7860/](http://127.0.0.1:7860/) — CodeLocal GUI.
+## API used by CodeLocal
 
-Or:
+| From GUI | Proxied to |
+|----------|------------|
+| `GET /api/tags` | Fixed local model name (no Ollama) |
+| `GET /api/health` | `http://127.0.0.1:8080/v1/models` |
+| `POST /api/chat` | `http://127.0.0.1:8080/v1/chat/completions` (OpenAI-compatible SSE) |
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\open_gui.ps1
-```
+## Office laptop (after permission)
 
-Terminal chat (optional): `py -3 scripts\chat.py` · or `ollama run coding-bot`
+Copy the whole `coding-bot` folder (including `runtime/` + `models/`). No Ollama install. Run `scripts\start_codelocal.ps1`. Needs Python 3 for the tiny GUI proxy only.
 
-## 2) Fine-tune with your Q&A (Unsloth)
+## Security
 
-Dataset: `data\coding_qa.jsonl` (add more rows anytime — one JSON object per line).
-
-Config: `configs\train_coder.yaml`  
-Base model: `unsloth/Qwen2.5-Coder-1.5B-Instruct`
-
-```powershell
-# Install Unsloth Core from local clone
-powershell -ExecutionPolicy Bypass -File scripts\setup_unsloth.ps1
-
-# Dry-run (works without GPU)
-py -3 scripts\finetune_unsloth.py --dry-run
-
-# Real train — NVIDIA GPU required
-py -3 scripts\finetune_unsloth.py
-```
-
-Or from the Unsloth CLI (after Studio/Core install):
-
-```powershell
-cd d:\LLM\unsloth
-unsloth train -c ..\coding-bot\configs\train_coder.yaml
-```
-
-## 3) Later: Jarvis
-
-After chat + coding + offline are solid, add voice recognition and desktop automation as a separate step.
+- Binds to `127.0.0.1` only
+- No external LLM API keys
+- Chat stays on the machine

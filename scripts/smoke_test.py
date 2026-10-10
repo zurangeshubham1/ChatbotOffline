@@ -1,4 +1,4 @@
-"""Quick offline check: Ollama + coding model answer a programming question."""
+"""Smoke test CodeLocal against llama.cpp OpenAI API (via GUI proxy or direct)."""
 
 from __future__ import annotations
 
@@ -8,80 +8,57 @@ import time
 import urllib.error
 import urllib.request
 
-URL = "http://127.0.0.1:11434"
-PROMPT = (
-    "Write a Python function that returns the factorial of n. "
-    "Keep it short and include a docstring."
-)
+GUI = "http://127.0.0.1:7860"
+LLAMA = "http://127.0.0.1:8080"
+PROMPT = "Write a Python function that returns the factorial of n. Keep it short."
+
+
+def get_json(url: str, timeout: int = 10):
+    with urllib.request.urlopen(url, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
 
 
 def main() -> int:
-    print("== Coding bot smoke test ==")
+    print("== CodeLocal / llama.cpp smoke test ==")
     try:
-        with urllib.request.urlopen(f"{URL}/api/tags", timeout=5) as resp:
-            tags = json.loads(resp.read().decode("utf-8"))
+        models = get_json(f"{LLAMA}/v1/models")
     except urllib.error.URLError as exc:
-        print(f"FAIL: Ollama not running ({exc})")
-        print("Start Ollama Desktop, then re-run this script.")
+        print(f"FAIL: llama.cpp not on :8080 ({exc})")
+        print("Run: powershell -File scripts\\start_llama.ps1")
         return 1
+    print(f"llama.cpp models OK: {len(models.get('data') or models.get('models') or [])}")
 
-    names = [m.get("name", "") for m in tags.get("models", [])]
-    print(f"Installed models: {names or '(none)'}")
+    try:
+        health = get_json(f"{GUI}/api/health")
+        print(f"GUI health: {health}")
+    except urllib.error.URLError:
+        print("WARN: GUI not on :7860 (optional for this test)")
 
-    preferred = [
-        "coding-bot:latest",
-        "coding-bot",
-        "qwen2.5-coder:1.5b",
-        "qwen2.5:1.5b-instruct",
-    ]
-    model = next((p for p in preferred if p in names), None)
-    if model is None:
-        # allow tags like qwen2.5-coder:1.5b-base
-        for p in preferred:
-            hit = next((n for n in names if n.startswith(p.split(":")[0])), None)
-            if hit:
-                model = hit
-                break
-    if model is None and names:
-        model = names[0]
-    if model is None:
-        print("FAIL: no models. Run: ollama pull qwen2.5-coder:1.5b")
-        return 1
-
-    print(f"Using model: {model}")
     payload = json.dumps(
         {
-            "model": model,
+            "model": "qwen2.5-coder-1.5b-instruct-q4_k_m",
             "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a concise coding assistant.",
-                },
+                {"role": "system", "content": "You are a concise coding assistant."},
                 {"role": "user", "content": PROMPT},
             ],
             "stream": False,
-            "options": {"temperature": 0.2, "num_predict": 256},
+            "temperature": 0.2,
         }
-    ).encode("utf-8")
+    ).encode()
     req = urllib.request.Request(
-        f"{URL}/api/chat",
+        f"{LLAMA}/v1/chat/completions",
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     t0 = time.time()
-    try:
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except Exception as exc:  # noqa: BLE001
-        print(f"FAIL: chat error: {exc}")
-        return 1
-    elapsed = time.time() - t0
-    text = data.get("message", {}).get("content", "").strip()
+    with urllib.request.urlopen(req, timeout=300) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
     print("-" * 40)
-    print(text or "(empty reply)")
+    print(text or "(empty)")
     print("-" * 40)
-    print(f"OK — reply in {elapsed:.1f}s ({len(text)} chars)")
+    print(f"OK in {time.time() - t0:.1f}s")
     return 0 if text else 1
 
 
