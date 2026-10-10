@@ -1,6 +1,6 @@
-# CodeLocal — offline coding chatbot (llama.cpp)
+# SuperBot — offline coding chatbot (llama.cpp + SQLite)
 
-No Ollama. No cloud API. Local GGUF model via **llama.cpp** + CodeLocal GUI.
+Formerly CodeLocal. No Ollama. No cloud API. Local GGUF via **llama.cpp**, ChatGPT-style GUI, chat history in **SQLite** (`data/chat_history.db`).
 
 ## Layout
 

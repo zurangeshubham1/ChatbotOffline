@@ -1,18 +1,26 @@
-"""Serve CodeLocal GUI and proxy llama.cpp OpenAI-compatible API."""
+"""Serve SuperBot GUI, SQLite history API, and llama.cpp OpenAI-compatible proxy."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import mimetypes
+import sys
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS = Path(__file__).resolve().parent
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+
+from chat_db import get_store  # noqa: E402
+
 GUI = ROOT / "gui"
 LLAMA = "http://127.0.0.1:8080"
 MODEL_ID = "qwen2.5-coder-1.5b-instruct-q4_k_m"
@@ -20,7 +28,7 @@ MODEL_FILE = "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf"
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "CodeLocalGUI/1.0"
+    server_version = "SuperBotGUI/1.0"
 
     def log_message(self, fmt: str, *args) -> None:
         print(f"[gui] {self.address_string()} - {fmt % args}")
@@ -33,22 +41,52 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _json(self, code: int, obj) -> None:
+        self._send(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+
+    def _read_json(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        raw = self.rfile.read(length) if length else b"{}"
+        return json.loads(raw.decode("utf-8") or "{}")
+
     def do_GET(self) -> None:
-        path = self.path.split("?", 1)[0]
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        qs = urllib.parse.parse_qs(parsed.query)
+
         if path == "/api/health":
             self._health()
             return
         if path == "/api/tags":
-            # Fixed local model list — no Ollama dependency.
-            body = json.dumps(
+            self._json(
+                200,
                 {
                     "models": [{"name": MODEL_ID, "file": MODEL_FILE}],
                     "backend": "llama.cpp",
                     "endpoint": f"{LLAMA}/v1/chat/completions",
-                }
-            ).encode()
-            self._send(200, body, "application/json; charset=utf-8")
+                    "app": "SuperBot",
+                },
+            )
             return
+        if path == "/api/conversations":
+            q = (qs.get("q") or [""])[0]
+            try:
+                self._json(200, {"conversations": get_store().list_conversations(q)})
+            except Exception as exc:  # noqa: BLE001
+                self._json(500, {"error": str(exc)})
+            return
+        if path.startswith("/api/conversations/"):
+            parts = path.strip("/").split("/")
+            # /api/conversations/{id}
+            if len(parts) == 3 and parts[2].isdigit():
+                try:
+                    self._json(200, get_store().get_conversation(int(parts[2])))
+                except KeyError as exc:
+                    self._json(404, {"error": str(exc)})
+                except Exception as exc:  # noqa: BLE001
+                    self._json(500, {"error": str(exc)})
+                return
+
         if path in ("/", "/index.html"):
             self._file(GUI / "index.html", "text/html; charset=utf-8")
             return
@@ -61,9 +99,66 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, b"Not found", "text/plain; charset=utf-8")
 
     def do_POST(self) -> None:
-        path = self.path.split("?", 1)[0]
+        path = urllib.parse.urlparse(self.path).path
         if path == "/api/chat":
             self._proxy_chat()
+            return
+        if path == "/api/conversations":
+            try:
+                body = self._read_json()
+                title = body.get("title") or "New chat"
+                self._json(201, get_store().create_conversation(title))
+            except Exception as exc:  # noqa: BLE001
+                self._json(400, {"error": str(exc)})
+            return
+        if path.startswith("/api/conversations/") and path.endswith("/messages"):
+            parts = path.strip("/").split("/")
+            # api conversations {id} messages
+            if len(parts) == 4 and parts[2].isdigit():
+                try:
+                    body = self._read_json()
+                    msg = get_store().add_message(
+                        int(parts[2]),
+                        body.get("role", ""),
+                        body.get("content", ""),
+                    )
+                    self._json(201, msg)
+                except KeyError as exc:
+                    self._json(404, {"error": str(exc)})
+                except ValueError as exc:
+                    self._json(400, {"error": str(exc)})
+                except Exception as exc:  # noqa: BLE001
+                    self._json(500, {"error": str(exc)})
+                return
+        self._send(404, b"Not found", "text/plain; charset=utf-8")
+
+    def do_PATCH(self) -> None:
+        path = urllib.parse.urlparse(self.path).path
+        parts = path.strip("/").split("/")
+        if len(parts) == 3 and parts[0] == "api" and parts[1] == "conversations" and parts[2].isdigit():
+            try:
+                body = self._read_json()
+                self._json(200, get_store().rename_conversation(int(parts[2]), body.get("title", "")))
+            except KeyError as exc:
+                self._json(404, {"error": str(exc)})
+            except ValueError as exc:
+                self._json(400, {"error": str(exc)})
+            except Exception as exc:  # noqa: BLE001
+                self._json(500, {"error": str(exc)})
+            return
+        self._send(404, b"Not found", "text/plain; charset=utf-8")
+
+    def do_DELETE(self) -> None:
+        path = urllib.parse.urlparse(self.path).path
+        parts = path.strip("/").split("/")
+        if len(parts) == 3 and parts[0] == "api" and parts[1] == "conversations" and parts[2].isdigit():
+            try:
+                get_store().delete_conversation(int(parts[2]))
+                self._json(200, {"ok": True})
+            except KeyError as exc:
+                self._json(404, {"error": str(exc)})
+            except Exception as exc:  # noqa: BLE001
+                self._json(500, {"error": str(exc)})
             return
         self._send(404, b"Not found", "text/plain; charset=utf-8")
 
@@ -84,16 +179,22 @@ class Handler(BaseHTTPRequestHandler):
                 detail = "ok" if ok else f"status {resp.status}"
         except urllib.error.URLError as exc:
             detail = str(exc.reason if hasattr(exc, "reason") else exc)
-        body = json.dumps({"ok": ok, "backend": "llama.cpp", "detail": detail}).encode()
-        self._send(200 if ok else 503, body, "application/json; charset=utf-8")
+        try:
+            get_store().list_conversations()
+            db_ok = True
+        except Exception as exc:  # noqa: BLE001
+            db_ok = False
+            detail = f"{detail}; db: {exc}"
+        self._json(
+            200 if ok else 503,
+            {"ok": ok, "backend": "llama.cpp", "db_ok": db_ok, "detail": detail, "app": "SuperBot"},
+        )
 
     def _proxy_chat(self) -> None:
-        length = int(self.headers.get("Content-Length", "0"))
-        raw = self.rfile.read(length)
         try:
-            incoming = json.loads(raw.decode("utf-8"))
+            incoming = self._read_json()
         except json.JSONDecodeError:
-            self._send(400, b'{"error":"invalid json"}', "application/json")
+            self._json(400, {"error": "invalid json"})
             return
 
         payload = {
@@ -125,16 +226,14 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(chunk)
                     self.wfile.flush()
         except urllib.error.URLError as exc:
-            msg = json.dumps(
-                {
-                    "error": str(exc),
-                    "hint": "Start llama.cpp first: scripts\\start_llama.ps1",
-                }
-            ).encode()
+            msg = {
+                "error": str(exc),
+                "hint": "Start llama.cpp first: scripts\\start_llama.ps1",
+            }
             if not getattr(self, "wfile", None) or self.wfile.closed:
                 return
             try:
-                self._send(502, msg, "application/json")
+                self._json(502, msg)
             except Exception:
                 pass
         except (BrokenPipeError, ConnectionResetError):
@@ -142,7 +241,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="CodeLocal GUI server (llama.cpp)")
+    parser = argparse.ArgumentParser(description="SuperBot GUI server (llama.cpp + SQLite)")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=7860)
     parser.add_argument("--no-browser", action="store_true")
@@ -151,10 +250,14 @@ def main() -> int:
     if not GUI.is_dir():
         raise SystemExit(f"GUI folder missing: {GUI}")
 
+    # Ensure DB is ready at startup
+    get_store()
+
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     url = f"http://{args.host}:{args.port}/"
-    print(f"CodeLocal GUI -> {url}")
+    print(f"SuperBot GUI -> {url}")
     print(f"Backend API  -> {LLAMA}/v1/chat/completions")
+    print(f"Chat DB      -> {ROOT / 'data' / 'chat_history.db'}")
     print("Keep this window open. Stop with Ctrl+C.")
 
     if not args.no_browser:

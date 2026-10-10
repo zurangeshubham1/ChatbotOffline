@@ -3,45 +3,59 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CodeLocal</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <title>SuperBot</title>
   <link rel="stylesheet" href="/app.css" />
 </head>
 <body>
-  <div class="atmosphere" aria-hidden="true"></div>
-
-  <div class="shell">
-    <header class="top">
-      <div class="brand-block">
-        <p class="brand">CodeLocal</p>
-        <p class="tagline">Offline coding assistant on your machine</p>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-top">
+        <div class="brand-row">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <p class="brand">SuperBot</p>
+            <p class="brand-sub">Local · Offline · Secure</p>
+          </div>
+        </div>
+        <button type="button" id="newChat" class="btn-new">+ New chat</button>
+        <label class="search-wrap">
+          <span class="sr-only">Search chats</span>
+          <input id="search" type="search" placeholder="Search chats…" autocomplete="off" />
+        </label>
       </div>
-      <div class="meta">
+      <nav id="chatList" class="chat-list" aria-label="Chat history"></nav>
+      <div class="sidebar-foot">
         <span id="status" class="status">Connecting…</span>
         <select id="model" class="model" aria-label="Model"></select>
-        <button type="button" id="clear" class="ghost" title="Clear chat">Clear</button>
       </div>
-    </header>
+    </aside>
 
-    <main id="thread" class="thread" aria-live="polite"></main>
+    <div class="main">
+      <header class="main-bar">
+        <button type="button" id="toggleSidebar" class="icon-btn" aria-label="Toggle sidebar">☰</button>
+        <h1 id="chatTitle" class="chat-title">New chat</h1>
+        <div class="bar-actions">
+          <button type="button" id="deleteChat" class="ghost danger" disabled>Delete</button>
+        </div>
+      </header>
 
-    <footer class="composer">
-      <form id="form" class="form">
-        <label class="sr-only" for="input">Message</label>
-        <textarea
-          id="input"
-          rows="1"
-          placeholder="Ask for code, debug help, or an explanation…"
-          autocomplete="off"
-        ></textarea>
-        <button type="submit" id="send" class="send" disabled>Send</button>
-      </form>
-      <p class="hint">Enter to send · Shift+Enter for new line · Local only, no cloud</p>
-    </footer>
+      <main id="thread" class="thread" aria-live="polite"></main>
+
+      <footer class="composer">
+        <form id="form" class="form">
+          <label class="sr-only" for="input">Message</label>
+          <textarea
+            id="input"
+            rows="1"
+            placeholder="Message SuperBot…"
+            autocomplete="off"
+          ></textarea>
+          <button type="submit" id="send" class="send" disabled>Send</button>
+        </form>
+        <p class="hint">Enter to send · Shift+Enter for new line · History saved in SQLite on this PC</p>
+      </footer>
+    </div>
   </div>
-
   <script src="/app.js"></script>
 </body>
 </html>

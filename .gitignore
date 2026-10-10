@@ -11,3 +11,7 @@ runtime/*
 Thumbs.db
 .env
 *.log
+data/chat_history.db
+data/chat_history.backup_*.db
+data/chat_history.corrupt_*.db
+gui/backup_pre_superbot/
